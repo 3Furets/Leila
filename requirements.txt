@@ -1,0 +1,8 @@
+﻿openai-whisper
+sounddevice
+soundfile
+edge-tts
+ollama
+python-dotenv
+numpy
+pygame

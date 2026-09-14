@@ -1,0 +1,36 @@
+﻿# Python
+__pycache__/
+*.py[cod]
+*.pyc
+*.pyo
+*.so
+*.egg-info/
+venv/
+env/
+
+# Audio temporaires
+audio/*.wav
+audio/*.mp3
+audio/tmp_*
+!audio/.gitkeep
+
+# Logs
+logs/*.log
+!logs/.gitkeep
+
+# Data
+data/*.json
+!data/.gitkeep
+
+# Config sensible
+.env
+*.key
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Node
+package-lock.json
+node_modules/
