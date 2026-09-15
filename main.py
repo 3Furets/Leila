@@ -14,6 +14,29 @@ from coach_prompt import COACH_PROMPT
 
 pygame.mixer.init()
 
+def lister_devices_audio():
+    '''Liste tous les appareils audio disponibles'''
+    print('\n📋 Appareils audio disponibles :')
+    print('=' * 50)
+    devices = sd.query_devices()
+    for i, device in enumerate(devices):
+        entree = '🎤' if device['max_input_channels'] > 0 else '  '
+        sortie = '🔊' if device['max_output_channels'] > 0 else '  '
+        print(f'[{i:2}] {entree}{sortie} {device[\"name\"]}')
+    print('=' * 50)
+    return devices
+
+def selectionner_device_bluetooth(devices):
+    '''Détecte automatiquement un casque Bluetooth'''
+    mots_cles_bt = ['bluetooth', 'headset', 'headphone', 'casque', 'airpods', 'hands-free']
+    for i, device in enumerate(devices):
+        nom = device['name'].lower()
+        if any(mot in nom for mot in mots_cles_bt):
+            if device['max_input_channels'] > 0:
+                print(f'🎧 Casque Bluetooth détecté : [{i}] {device[\"name\"]}')
+                return i
+    return None
+
 def detecter_emotion(texte):
     texte_lower = texte.lower()
     if any(mot in texte_lower for mot in ['bravo', 'excellent', 'génial', 'super', 'félicitations']) or '!' in texte:
@@ -41,6 +64,19 @@ print('⏳ Chargement de Whisper...')
 whisper_model = whisper.load_model(MODEL_STT)
 print('✅ Whisper chargé !')
 
+# Detection automatique du device audio
+devices = sd.query_devices()
+device_entree = DEVICE_ENTREE
+device_sortie = DEVICE_SORTIE
+
+if device_entree is None:
+    bt_device = selectionner_device_bluetooth(devices)
+    if bt_device is not None:
+        device_entree = bt_device
+        print(f'✅ Utilisation du Bluetooth pour entrée : [{bt_device}]')
+    else:
+        print('ℹ️  Aucun Bluetooth détecté, utilisation du micro par défaut')
+
 def enregistrer_audio():
     print(f'🎤 Je vous écoute... (max {DUREE_ECOUTE} secondes)')
     print('   Parlez maintenant !')
@@ -50,23 +86,24 @@ def enregistrer_audio():
         int(DUREE_ECOUTE * sample_rate),
         samplerate=sample_rate,
         channels=1,
-        dtype='float32'
+        dtype='float32',
+        device=device_entree
     )
     sd.wait()
 
     volume = np.abs(audio).mean()
-    print(f'   Volume détecté : {volume:.4f}')
+    print(f'   Volume détecté : {volume:.4f} (seuil: {SEUIL_SILENCE})')
 
     if volume < SEUIL_SILENCE:
         print('⚠️  Signal audio trop faible')
         return None
 
+    os.makedirs('audio', exist_ok=True)
     sf.write('audio/input.wav', audio, sample_rate)
     return 'audio/input.wav'
 
 def transcrire_audio(fichier_audio):
     print('🔄 Transcription en cours...')
-
     result = whisper_model.transcribe(
         fichier_audio,
         language=LANGUE,
@@ -77,7 +114,6 @@ def transcrire_audio(fichier_audio):
         condition_on_previous_text=True,
         initial_prompt='Bonjour, je parle en français.'
     )
-
     texte = result['text'].strip()
     print(f'📝 Vous avez dit : "{texte}"')
     return texte
@@ -103,6 +139,7 @@ def synthetiser_voix(texte):
     buffer = asyncio.run(synthetiser_voix_async(texte, emotion))
 
     tmp_path = 'audio/tmp_tts.mp3'
+    os.makedirs('audio', exist_ok=True)
     with open(tmp_path, 'wb') as f:
         f.write(buffer.read())
 
@@ -114,7 +151,6 @@ def synthetiser_voix(texte):
 
 def obtenir_et_parler_reponse(texte):
     print('🧠 Le coach réfléchit...')
-
     historique.append({'role': 'user', 'content': texte})
 
     stream = ollama.chat(
@@ -154,15 +190,14 @@ def main():
     os.makedirs('audio', exist_ok=True)
     os.makedirs('logs', exist_ok=True)
 
+    lister_devices_audio()
+
     print('\n' + '=' * 45)
     print('   🎯 COACH VOCAL - Prêt !')
     print('=' * 45)
-    print('💡 Conseils pour une bonne reconnaissance :')
-    print('   - Parlez clairement et distinctement')
-    print('   - Attendez le signal 🎤 avant de parler')
-    print('   - Restez à 30-50cm du micro')
-    print('   - Évitez les bruits de fond')
-    print('   CTRL+C pour quitter\n')
+    print(f'🎧 Device entrée  : {device_entree if device_entree is not None else "Par défaut"}')
+    print(f'🔊 Device sortie  : {device_sortie if device_sortie is not None else "Par défaut"}')
+    print('💡 CTRL+C pour quitter\n')
 
     bienvenue = 'Bonjour ! Je suis votre coach vocal personnel. Comment puis-je vous aider aujourd\'hui ?'
     print(f'🤖 Coach : {bienvenue}')
@@ -171,7 +206,6 @@ def main():
     while True:
         try:
             audio = enregistrer_audio()
-
             if audio is None:
                 print('🔄 Réessayez en parlant plus fort')
                 continue
